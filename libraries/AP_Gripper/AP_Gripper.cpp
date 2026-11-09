@@ -4,6 +4,7 @@
 
 #include "AP_Gripper_Servo.h"
 #include "AP_Gripper_EPM.h"
+#include "AP_Gripper_BTS7960.h"
 
 extern const AP_HAL::HAL& hal;
 
@@ -26,7 +27,7 @@ const AP_Param::GroupInfo AP_Gripper::var_info[] = {
     // @DisplayName: Gripper Type
     // @Description: Gripper enable/disable
     // @User: Standard
-    // @Values: 0:None,1:Servo,2:EPM
+    // @Values: 0:None,1:Servo,2:EPM,3:BTS7960
     AP_GROUPINFO("TYPE", 1, AP_Gripper, config.type, 0),
 
     // @Param: GRAB
@@ -76,6 +77,117 @@ const AP_Param::GroupInfo AP_Gripper::var_info[] = {
     // @Units: s
     AP_GROUPINFO("AUTOCLOSE",  7, AP_Gripper, config.autoclose_time, GRIPPER_AUTOCLOSE_DEFAULT),
 
+    // @Param: DC_PWM_FREQ
+    // @DisplayName: DC Gripper PWM Frequency
+    // @Description: PWM frequency in Hz used on the BTS7960 DC gripper outputs. The pulse width in microseconds is interpreted as a duty cycle of the resulting period, so set SERVOx_MIN to 0 and SERVOx_MAX to the period in microseconds (1000 at 1000 Hz) on the claw channels
+    // @User: Advanced
+    // @Range: 100 5000
+    // @Units: Hz
+    // @RebootRequired: True
+    AP_GROUPINFO("DC_PWM_FREQ", 8, AP_Gripper, config.dc_pwm_freq, 1000),
+
+    // @Param: DC_PWM_MAX
+    // @DisplayName: DC Gripper Maximum Duty Cycle
+    // @Description: Maximum PWM duty cycle in percent applied to the BTS7960 while the claw is moving
+    // @User: Advanced
+    // @Range: 10 100
+    // @Units: %
+    AP_GROUPINFO("DC_PWM_MAX", 9, AP_Gripper, config.dc_pwm_max, 100),
+
+    // @Param: DC_RAMP_MS
+    // @DisplayName: DC Gripper Soft Start Ramp
+    // @Description: Time in milliseconds over which the duty cycle ramps from zero to DC_PWM_MAX after a move starts; 0 for an immediate full duty cycle
+    // @User: Advanced
+    // @Range: 0 2000
+    // @Units: ms
+    AP_GROUPINFO("DC_RAMP_MS", 10, AP_Gripper, config.dc_ramp_ms, 300),
+
+    // @Param: DC_STALL_MA
+    // @DisplayName: DC Gripper Stall Current
+    // @Description: Motor current in milliamps above which the claw is considered stalled (end of travel or object grasped), as measured by the INA219. Set to 0 to disable current-based detection entirely; the INA219 is then not required and only the movement timeout applies
+    // @User: Advanced
+    // @Range: 0 20000
+    // @Units: mA
+    AP_GROUPINFO("DC_STALL_MA", 11, AP_Gripper, config.dc_stall_ma, 2000),
+
+    // @Param: DC_STALL_MS
+    // @DisplayName: DC Gripper Stall Time
+    // @Description: Time in milliseconds the motor current must stay continuously above DC_STALL_MA before a stall is declared
+    // @User: Advanced
+    // @Range: 20 2000
+    // @Units: ms
+    AP_GROUPINFO("DC_STALL_MS", 12, AP_Gripper, config.dc_stall_ms, 200),
+
+    // @Param: DC_BLANK_MS
+    // @DisplayName: DC Gripper Current Blanking Time
+    // @Description: Time in milliseconds after a move starts (or reverses) during which the motor current is ignored, to mask the start-up inrush current
+    // @User: Advanced
+    // @Range: 0 2000
+    // @Units: ms
+    AP_GROUPINFO("DC_BLANK_MS", 13, AP_Gripper, config.dc_blank_ms, 300),
+
+    // @Param: DC_OVRC_MA
+    // @DisplayName: DC Gripper Overcurrent Limit
+    // @Description: Hard motor current limit in milliamps; exceeding it (after the blanking time) stops the claw immediately without waiting for DC_STALL_MS. Also used as the INA219 full-scale design current. The INA219 can only measure up to 320 mV across the shunt, so the maximum measurable current is 320 mV / DC_SHUNT (3200 mA with the stock 100 mOhm shunt); keep this limit below that, or fit a 0.05 Ohm shunt for a 6.4 A range and raise this limit via the parameter without rebuilding. Set to 0 to disable
+    // @User: Advanced
+    // @Range: 0 30000
+    // @Units: mA
+    AP_GROUPINFO("DC_OVRC_MA", 14, AP_Gripper, config.dc_ovrc_ma, 3000),
+
+    // @Param: DC_TOUT_S
+    // @DisplayName: DC Gripper Movement Timeout
+    // @Description: Maximum duration in seconds of a single open or close movement. A stall detected in the last 20 percent of this time is treated as the end of travel; a movement that reaches the timeout without a stall is stopped and flagged as a fault
+    // @User: Advanced
+    // @Range: 1 60
+    // @Units: s
+    AP_GROUPINFO("DC_TOUT_S", 15, AP_Gripper, config.dc_tout_s, 10),
+
+    // @Param: DC_HOLD_PCT
+    // @DisplayName: DC Gripper Holding Duty Cycle
+    // @Description: Duty cycle in percent kept applied in the closing direction after an object has been grasped, to hold the grip. Set to 0 to simply stop (and brake, if DC_BRAKE is 1) after a grasp
+    // @User: Advanced
+    // @Range: 0 100
+    // @Units: %
+    AP_GROUPINFO("DC_HOLD_PCT", 16, AP_Gripper, config.dc_hold_pct, 0),
+
+    // @Param: DC_BRAKE
+    // @DisplayName: DC Gripper Brake On Stop
+    // @Description: Behaviour of the BTS7960 when the claw stops: 0 to coast (driver disabled), 1 to brake (driver enabled with both direction inputs at zero)
+    // @User: Advanced
+    // @Values: 0:Coast,1:Brake
+    AP_GROUPINFO("DC_BRAKE", 17, AP_Gripper, config.dc_brake, 1),
+
+    // @Param: DC_I2C_BUS
+    // @DisplayName: DC Gripper INA219 I2C Bus
+    // @Description: I2C bus number the INA219 claw current sensor is connected to (the external I2C port on most boards)
+    // @User: Advanced
+    // @Range: 0 3
+    // @RebootRequired: True
+    AP_GROUPINFO("DC_I2C_BUS", 18, AP_Gripper, config.dc_i2c_bus, 1),
+
+    // @Param: DC_I2C_ADDR
+    // @DisplayName: DC Gripper INA219 I2C Address
+    // @Description: I2C address of the INA219 claw current sensor, 64 (0x40) by default, as set by the A0/A1 pins of the sensor
+    // @User: Advanced
+    // @Range: 64 79
+    // @RebootRequired: True
+    AP_GROUPINFO("DC_I2C_ADDR", 19, AP_Gripper, config.dc_i2c_addr, 64),
+
+    // @Param: DC_SHUNT
+    // @DisplayName: DC Gripper INA219 Shunt Resistor
+    // @Description: Value in milliohms of the INA219 shunt resistor (100 milliohms on most INA219 breakout boards)
+    // @User: Advanced
+    // @Range: 1 1000
+    // @RebootRequired: True
+    AP_GROUPINFO("DC_SHUNT", 20, AP_Gripper, config.dc_shunt, 100),
+
+    // @Param: DC_CURR
+    // @DisplayName: DC Gripper Motor Current
+    // @Description: Live claw motor current in milliamps as measured by the INA219; updated by the BTS7960 backend while the claw is moving and intended for stall threshold calibration. Read-only, do not set
+    // @User: Advanced
+    // @Units: mA
+    AP_GROUPINFO("DC_CURR", 21, AP_Gripper, config.dc_curr, 0),
+
     AP_GROUPEND
 };
 
@@ -121,6 +233,11 @@ void AP_Gripper::init()
         backend = NEW_NOTHROW AP_Gripper_EPM(config);
         break;
 #endif
+#if AP_GRIPPER_BTS7960_ENABLED
+    case 3:
+        backend = NEW_NOTHROW AP_Gripper_BTS7960(config);
+        break;
+#endif
     default:
         break;
     }
@@ -143,6 +260,7 @@ void AP_Gripper::init()
 
 PASS_TO_BACKEND(grab)
 PASS_TO_BACKEND(release)
+PASS_TO_BACKEND(stop)
 PASS_TO_BACKEND(update)
 
 #undef PASS_TO_BACKEND

@@ -42,6 +42,22 @@ public:
     // Map thrust input -1~1 to pwm output 1100~1900
     int16_t calc_thrust_to_pwm(float thrust_in) const;
 
+    // true only for the unidirectional forward motors (Motor 1 and 2) of the SimpleROV-4 frame
+    bool is_forward_unidirectional(uint8_t motor_num) const;
+
+    // Map thrust input to pwm for a unidirectional forward motor: thrust <= 0 is
+    // clamped to the idle pwm (no reverse), thrust > 0 rises from idle to max pwm
+    int16_t calc_thrust_to_pwm_unidirectional(float thrust_in) const;
+
+    // pwm sent to a motor when shut down/idle: forward unidirectional idle for
+    // Motor 1 and 2 on SimpleROV-4, neutral 1500 for all other motors
+    int16_t get_idle_pwm(uint8_t motor_num) const;
+
+    // Map a motor test/detect pwm (bidirectional convention, centred on 1500)
+    // for a unidirectional forward motor: at or below neutral is the idle pwm,
+    // above neutral rises from idle up to the max pwm. Other motors unchanged
+    int16_t calc_test_pwm(uint8_t motor_num, int16_t pwm) const;
+
     // output_to_motors - sends minimum values out to the motors
     void output_to_motors() override;
 
@@ -70,6 +86,8 @@ protected:
     // Parameters
     AP_Int8             _motor_reverse[AP_MOTORS_MAX_NUM_MOTORS];
     AP_Float            _forwardVerticalCouplingFactor;
+    AP_Int16            _fwd_pwm_idle;
+    AP_Int16            _fwd_pwm_max;
 
     float               _forward_factor[AP_MOTORS_MAX_NUM_MOTORS]; // each motors contribution to forward/backward
     float               _lateral_factor[AP_MOTORS_MAX_NUM_MOTORS];  // each motors contribution to lateral (left/right)

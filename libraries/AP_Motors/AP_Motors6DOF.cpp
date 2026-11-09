@@ -122,6 +122,24 @@ const AP_Param::GroupInfo AP_Motors6DOF::var_info[] = {
     // @User: Standard
     AP_GROUPINFO("12_DIRECTION", 13, AP_Motors6DOF, _motor_reverse[11], 1),
 
+    // @Param: FWD_IDLE
+    // @DisplayName: Forward motor idle PWM
+    // @Description: PWM in microseconds sent to the unidirectional forward motors (Motor 1 and 2, SimpleROV-4 frame only) when shut down, idle or commanded to zero or reverse thrust. Reverse commands are clamped to this value as the forward ESCs have no reverse. On all other frames and motors this parameter has no effect.
+    // @Units: PWM
+    // @Range: 800 2200
+    // @Increment: 1
+    // @User: Standard
+    AP_GROUPINFO("FWD_IDLE", 14, AP_Motors6DOF, _fwd_pwm_idle, 1000),
+
+    // @Param: FWD_MAX
+    // @DisplayName: Forward motor maximum PWM
+    // @Description: PWM in microseconds sent to the unidirectional forward motors (Motor 1 and 2, SimpleROV-4 frame only) at full forward thrust. Forward thrust above zero is mapped linearly from FWD_IDLE to this value. On all other frames and motors this parameter has no effect.
+    // @Units: PWM
+    // @Range: 800 2200
+    // @Increment: 1
+    // @User: Standard
+    AP_GROUPINFO("FWD_MAX", 15, AP_Motors6DOF, _fwd_pwm_max, 2000),
+
     AP_GROUPEND
 };
 
@@ -223,12 +241,46 @@ void AP_Motors6DOF::output_min()
     limit.set_throttle(false);
 
     // fill the motor_out[] array for HIL use and send minimum value to each motor
-    // ToDo find a field to store the minimum pwm instead of hard coding 1500
     for (i=0; i<AP_MOTORS_MAX_NUM_MOTORS; i++) {
         if (motor_enabled[i]) {
-            rc_write(i, 1500);
+            rc_write(i, get_idle_pwm(i));
         }
     }
+}
+
+bool AP_Motors6DOF::is_forward_unidirectional(uint8_t motor_num) const
+{
+    return (sub_frame_t)_active_frame_class == SUB_FRAME_SIMPLEROV_4 &&
+           (motor_num == 0 || motor_num == 1);
+}
+
+int16_t AP_Motors6DOF::calc_thrust_to_pwm_unidirectional(float thrust_in) const
+{
+    if (thrust_in <= 0) {
+        return _fwd_pwm_idle;
+    }
+    const float thrust = MIN(thrust_in, 1.0f);
+    const int16_t pwm = _fwd_pwm_idle + int16_t(thrust * (_fwd_pwm_max - _fwd_pwm_idle));
+    return MIN(pwm, _fwd_pwm_max);
+}
+
+int16_t AP_Motors6DOF::get_idle_pwm(uint8_t motor_num) const
+{
+    if (is_forward_unidirectional(motor_num)) {
+        return _fwd_pwm_idle;
+    }
+    return 1500;
+}
+
+int16_t AP_Motors6DOF::calc_test_pwm(uint8_t motor_num, int16_t pwm) const
+{
+    if (!is_forward_unidirectional(motor_num)) {
+        return pwm;
+    }
+    if (pwm <= 1500) {
+        return _fwd_pwm_idle;
+    }
+    return MIN(_fwd_pwm_idle + (pwm - 1500), _fwd_pwm_max);
 }
 
 int16_t AP_Motors6DOF::calc_thrust_to_pwm(float thrust_in) const
@@ -246,9 +298,10 @@ void AP_Motors6DOF::output_to_motors()
     case SpoolState::SHUT_DOWN:
     case SpoolState::GROUND_IDLE:
         // sends neutral values out to the motors when shut down or when armed but not flying
+        // (forward unidirectional motors on SimpleROV-4 get their idle pwm instead of neutral)
         for (uint8_t i = 0; i < AP_MOTORS_MAX_NUM_MOTORS; i++) {
             if (motor_enabled[i]) {
-                motor_out[i] = 1500;
+                motor_out[i] = get_idle_pwm(i);
             }
         }
         break;
@@ -258,7 +311,11 @@ void AP_Motors6DOF::output_to_motors()
         // set motor output based on thrust requests
         for (uint8_t i = 0; i < AP_MOTORS_MAX_NUM_MOTORS; i++) {
             if (motor_enabled[i]) {
-                motor_out[i] = calc_thrust_to_pwm(_thrust_rpyt_out[i]);
+                if (is_forward_unidirectional(i)) {
+                    motor_out[i] = calc_thrust_to_pwm_unidirectional(_thrust_rpyt_out[i]);
+                } else {
+                    motor_out[i] = calc_thrust_to_pwm(_thrust_rpyt_out[i]);
+                }
             }
         }
         break;

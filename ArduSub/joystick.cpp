@@ -632,6 +632,20 @@ void Sub::handle_jsbutton_press(uint8_t _button, bool shift, bool held)
         // Not implemented
         break;
 
+#if AP_GRIPPER_ENABLED
+    case JSButton::button_function_t::k_claw_close:
+    case JSButton::button_function_t::k_claw_close_momentary:
+        AP::gripper().grab();
+        break;
+    case JSButton::button_function_t::k_claw_open:
+    case JSButton::button_function_t::k_claw_open_momentary:
+        AP::gripper().release();
+        break;
+    case JSButton::button_function_t::k_claw_stop:
+        AP::gripper().stop();
+        break;
+#endif
+
 #if AP_SCRIPTING_ENABLED
     case JSButton::button_function_t::k_script_1:
         sub.script_buttons[0].press();
@@ -703,6 +717,13 @@ void Sub::handle_jsbutton_release(uint8_t _button, bool shift) {
     {
         sub.g2.actuators.center_actuator(5);
     }
+        break;
+#endif
+
+#if AP_GRIPPER_ENABLED
+    case JSButton::button_function_t::k_claw_open_momentary:
+    case JSButton::button_function_t::k_claw_close_momentary:
+        AP::gripper().stop();
         break;
 #endif
 

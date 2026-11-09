@@ -45,6 +45,9 @@ public:
     // release - move the servo output to the release position
     void release();
 
+    // stop - stop any gripper motion (only implemented by some backends)
+    void stop();
+
     // released - returns true if currently in released position
     bool released() const;
 
@@ -78,6 +81,22 @@ public:
         AP_UInt8    regrab_interval;       // Time in seconds that EPM gripper will regrab the cargo to ensure grip has not weakened
         AP_Float    autoclose_time;        // Automatic close time (in seconds)
         AP_Int16    uavcan_hardpoint_id;
+
+        // BTS7960 DC motor gripper backend parameters (GRIP_DC_*)
+        AP_Int16    dc_pwm_freq;           // PWM frequency of the claw outputs (Hz)
+        AP_Int8     dc_pwm_max;            // maximum duty cycle while moving (%)
+        AP_Int16    dc_ramp_ms;            // soft-start ramp time (ms)
+        AP_Int32    dc_stall_ma;           // stall current threshold (mA, 0 disables current detection)
+        AP_Int16    dc_stall_ms;           // time current must stay above the stall threshold (ms)
+        AP_Int16    dc_blank_ms;           // current blanking time after starting a move (ms)
+        AP_Int32    dc_ovrc_ma;            // hard overcurrent limit (mA, 0 disables)
+        AP_Int8     dc_tout_s;             // movement timeout (s)
+        AP_Int8     dc_hold_pct;           // holding duty cycle after a grasp (%) (0 = stop)
+        AP_Int8     dc_brake;              // 0 = coast when stopped, 1 = brake when stopped
+        AP_Int8     dc_i2c_bus;            // I2C bus of the INA219 current sensor
+        AP_Int8     dc_i2c_addr;           // I2C address of the INA219 current sensor
+        AP_Int16    dc_shunt;              // INA219 shunt resistor (milliohms)
+        AP_Int32    dc_curr;               // live claw motor current (mA), updated by the BTS7960 backend
 
         gripper_state state = STATE_NEUTRAL;
     } config;

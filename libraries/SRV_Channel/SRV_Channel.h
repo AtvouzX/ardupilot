@@ -225,6 +225,9 @@ public:
         k_actuator4             = 187,
         k_actuator5             = 188,
         k_actuator6             = 189,
+        k_gripper_dc_fwd        = 190,   ///< DC motor gripper (BTS7960) forward (RPWM) output
+        k_gripper_dc_rev        = 191,   ///< DC motor gripper (BTS7960) reverse (LPWM) output
+        k_gripper_dc_en         = 192,   ///< DC motor gripper (BTS7960) enable (R_EN/L_EN) output
         k_nr_aux_servo_functions         ///< This must be the last enum value (only add new values _before_ this one)
     } Function;
 

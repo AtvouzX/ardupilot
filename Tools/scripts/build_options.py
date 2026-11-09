@@ -282,6 +282,7 @@ BUILD_OPTIONS = [
     # Feature('VTOL Frame', '6DOF', 'AP_MOTORS_FRAME_6DOF_ENABLED', 'Sub 6DOF', 0, None),  # Sub fails to build without this  # noqa: E501
 
     Feature('Payload', 'GRIPPER', 'AP_GRIPPER_ENABLED', 'Enable Gripper', 0, None),
+    Feature('Payload', 'GRIPPER_BTS7960', 'AP_GRIPPER_BTS7960_ENABLED', 'Enable BTS7960 DC Gripper', 0, 'GRIPPER'),
     Feature('Payload', 'SPRAYER', 'HAL_SPRAYER_ENABLED', 'Enable Sprayer', 0, None),
     Feature('Payload', 'LANDING_GEAR', 'AP_LANDINGGEAR_ENABLED', 'Enable Landing Gear', 0, None),
     Feature('Payload', 'WINCH', 'AP_WINCH_ENABLED', 'Enable Winch', 0, None),

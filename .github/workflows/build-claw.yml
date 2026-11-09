@@ -1,0 +1,31 @@
+name: build claw firmware
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    container: ardupilot/ardupilot-dev-chibios:v0.2.0
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Build ArduSub for Pixhawk1
+        shell: bash
+        run: |
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+          PATH="/opt/gcc-arm-none-eabi-10/bin:/usr/lib/ccache:${PATH}"
+          ./waf configure --board Pixhawk1
+          ./waf sub
+
+      - name: Upload firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: ardupilot-pixhawk1-claw
+          path: build/Pixhawk1/bin/*.apj
+          if-no-files-found: error

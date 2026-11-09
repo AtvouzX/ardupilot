@@ -36,6 +36,9 @@ public:
     // release - move the servo output to the release position
     virtual void release() = 0;
 
+    // stop - stop any gripper motion; most backends do nothing
+    virtual void stop() { }
+
     // valid - returns true if the backend should be working
     virtual bool valid() const { return true; };
 

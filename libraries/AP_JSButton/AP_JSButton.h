@@ -148,6 +148,12 @@ public:
         k_servo_6_min_toggle     = 137,
         k_servo_6_max_toggle     = 138,
 
+        k_claw_open              = 139,           ///< open the DC gripper claw (latched)
+        k_claw_close             = 140,           ///< close the DC gripper claw (latched)
+        k_claw_stop              = 141,           ///< stop the DC gripper claw
+        k_claw_open_momentary    = 142,           ///< open the DC gripper claw while held
+        k_claw_close_momentary   = 143,           ///< close the DC gripper claw while held
+
         k_nr_btn_functions         ///< This must be the last enum value (only add new values _before_ this one)
     } button_function_t;
 
@@ -162,6 +168,6 @@ public:
 
 private:
     // Button mappings
-    AP_Int8 _function;
-    AP_Int8 _sfunction;
+    AP_Int16 _function;
+    AP_Int16 _sfunction;
 };

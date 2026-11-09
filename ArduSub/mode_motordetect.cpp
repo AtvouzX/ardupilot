@@ -61,7 +61,7 @@ void ModeMotordetect::run()
         // Force all motors to stop
         for(uint8_t i=0; i < AP_MOTORS_MAX_NUM_MOTORS; i++) {
             if (motors.motor_is_enabled(i)) {
-                motors.output_test_num(i, 1500);
+                motors.output_test_num(i, motors.get_idle_pwm(i));
             }
         }
         md_state = STANDBY;
@@ -82,7 +82,7 @@ void ModeMotordetect::run()
         // Force all motors to stop
         for (uint8_t i=0; i <AP_MOTORS_MAX_NUM_MOTORS; i++) {
             if (motors.motor_is_enabled(i)) {
-                motors.output_test_num(i, 1500);
+                motors.output_test_num(i, motors.get_idle_pwm(i));
             }
         }
         // wait until gyro product is under a certain(experimental) threshold
@@ -100,7 +100,7 @@ void ModeMotordetect::run()
     // Thrusts motor for 500ms
     case THRUSTING:
         if (AP_HAL::millis() < (thrusting_timer + 500)) {
-            if (!motors.output_test_num(current_motor, 1500 + 300*current_direction)) {
+            if (!motors.output_test_num(current_motor, motors.calc_test_pwm(current_motor, 1500 + 300*current_direction))) {
                 md_state = DONE;
             };
 
@@ -137,13 +137,27 @@ void ModeMotordetect::run()
         }
         // Good read, inverted
         else if (-directions == motors.get_motor_angular_factors(current_motor)) {
-            gcs().send_text(MAV_SEVERITY_INFO, "Thruster %d is reversed! Saving it!", current_motor + 1);
-            motors.set_reversed(current_motor, true);
+            if (motors.is_forward_unidirectional(current_motor)) {
+                // A unidirectional forward thruster must not be reversed in
+                // software: its forward thrust would become negative and be
+                // clamped to idle. It has to be reversed physically instead.
+                gcs().send_text(MAV_SEVERITY_WARNING, "Thruster %d is reversed! Unidirectional thruster: reverse it physically (motor wires, ESC direction or prop)!", current_motor + 1);
+            } else {
+                gcs().send_text(MAV_SEVERITY_INFO, "Thruster %d is reversed! Saving it!", current_motor + 1);
+                motors.set_reversed(current_motor, true);
+            }
         }
         // Bad read!
         else {
-            gcs().send_text(MAV_SEVERITY_INFO, "Bad thrust read, trying to push the other way...");
             // If we got here, we couldn't identify anything that made sense.
+            if (motors.is_forward_unidirectional(current_motor) && current_direction == UP) {
+                // A unidirectional forward thruster cannot thrust the other
+                // way, so there is no second direction to try.
+                gcs().send_text(MAV_SEVERITY_WARNING, "Failed! Please check Thruster %d and frame setup!", current_motor + 1);
+                md_state = DONE;
+                break;
+            }
+            gcs().send_text(MAV_SEVERITY_INFO, "Bad thrust read, trying to push the other way...");
             // Let's try pushing the thruster the other way, maybe we are in too shallow waters or hit something
             if (current_direction == DOWN) {
                 // The reading for the second direction was also bad, we failed.
